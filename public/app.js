@@ -274,8 +274,6 @@ function updateStats(meta, sections) {
     ? new Date(meta.lastSyncedAt || meta.lastSyncAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })
     : '—';
   document.getElementById('live-status').textContent = `Live · last sync ${synced}`;
-  document.getElementById('footer-meta').textContent =
-    `Live catalogue · last sync ${synced} · Prices in INR, inclusive of applicable taxes.`;
 }
 
 async function loadCatalogue() {
