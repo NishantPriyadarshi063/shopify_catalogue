@@ -24,6 +24,20 @@ function parseDatabaseUrl(url) {
   };
 }
 
+function parseBrandList(value) {
+  if (!value || !String(value).trim()) return [];
+  return String(value)
+    .split(',')
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+function envBool(name, fallback) {
+  const raw = process.env[name];
+  if (raw == null || raw === '') return fallback;
+  return ['1', 'true', 'yes', 'on'].includes(String(raw).toLowerCase());
+}
+
 const dbConfig = parseDatabaseUrl(process.env.DATABASE_URL);
 
 module.exports = {
@@ -31,6 +45,13 @@ module.exports = {
   nodeEnv: process.env.NODE_ENV || 'development',
   apiVersion: process.env.SHOPIFY_API_VERSION || '2025-01',
   defaultBrand: process.env.CATALOGUE_DEFAULT_BRAND || 'tiltingheads',
-  reconcileIntervalMin: Number(process.env.CATALOGUE_RECONCILE_INTERVAL_MIN || 60),
   database: dbConfig,
+  backfill: {
+    enabled: envBool('CATALOGUE_BACKFILL_ENABLED', true),
+    intervalMin: Number(process.env.CATALOGUE_BACKFILL_INTERVAL_MIN || 30),
+    runOnBoot: envBool('CATALOGUE_BACKFILL_ON_BOOT', true),
+    bootDelaySec: Number(process.env.CATALOGUE_BACKFILL_BOOT_DELAY_SEC || 10),
+    // empty = all configured brands
+    brands: parseBrandList(process.env.CATALOGUE_BACKFILL_BRANDS),
+  },
 };

@@ -9,9 +9,13 @@ const config = require('./config/env');
 const { getAllConfiguredBrands } = require('./config/brands');
 const { query, closePool } = require('./config/database');
 const { createCatalogueRoutes } = require('./routes/catalogueRoutes');
+const {
+  startBackfillScheduler,
+  stopBackfillScheduler,
+  getBackfillStatus,
+} = require('./modules/catalogue/backfillScheduler');
 
 async function main() {
-  // Verify DB connectivity early
   await query('SELECT 1 AS ok');
   console.log(`Database connected (schema: ${config.database.schema})`);
 
@@ -29,7 +33,11 @@ async function main() {
       const { rows } = await query(
         `SELECT brand_id, slug, product_count, last_synced_at FROM brands ORDER BY brand_id`,
       );
-      res.json({ ok: true, brands: rows });
+      res.json({
+        ok: true,
+        brands: rows,
+        backfill: getBackfillStatus(),
+      });
     } catch (err) {
       res.status(500).json({ ok: false, error: err.message });
     }
@@ -47,9 +55,11 @@ async function main() {
     console.log(`Catalogue server listening on http://localhost:${config.port}`);
     console.log(`API: http://localhost:${config.port}/api/v1/catalogue/20/catalogue`);
     console.log(`UI:  http://localhost:${config.port}/`);
+    startBackfillScheduler();
   });
 
   const shutdown = async () => {
+    stopBackfillScheduler();
     server.close();
     await closePool();
     process.exit(0);

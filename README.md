@@ -22,19 +22,31 @@ Requires a `.env` with `DATABASE_URL` and Shopify brand tokens (see `.env.exampl
 cd CATALOGUE
 docker compose build
 docker compose --profile tools run --rm migrate
-docker compose --profile tools run --rm backfill
 docker compose up -d
 ```
 
 App: **http://localhost:5050**
 
-Useful:
+Backfill runs **automatically every 30 minutes** inside the server (and once shortly after boot). Manual backfill is optional:
 
 ```bash
 docker compose logs -f catalogue
+docker compose --profile tools run --rm backfill
 docker compose --profile tools run --rm backfill node scripts/backfill.js --all
 docker compose down
 ```
+
+## Auto backfill
+
+| Env | Default | Meaning |
+|---|---|---|
+| `CATALOGUE_BACKFILL_ENABLED` | `true` | Turn cron on/off |
+| `CATALOGUE_BACKFILL_INTERVAL_MIN` | `30` | Minutes between runs |
+| `CATALOGUE_BACKFILL_ON_BOOT` | `true` | Run once after startup |
+| `CATALOGUE_BACKFILL_BOOT_DELAY_SEC` | `10` | Delay before first boot run |
+| `CATALOGUE_BACKFILL_BRANDS` | _(empty)_ | Comma list of slugs; empty = all brands |
+
+Status is on `GET /health` → `backfill`.
 
 ## Scripts
 
