@@ -207,11 +207,6 @@ function renderProductDetail(product, activeIndex = 0) {
           ${paragraphs || '<p>No description available.</p>'}
         </div>
         ${variantBlock}
-        ${(product.tags || []).length ? `
-          <div class="pdp-tags">
-            ${product.tags.map((t) => `<span class="chip">${escapeHtml(t)}</span>`).join('')}
-          </div>
-        ` : ''}
       </div>
     </article>
   `;
