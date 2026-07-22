@@ -1,0 +1,48 @@
+services:
+  catalogue:
+    build: .
+    image: tiltingheads-catalogue:latest
+    container_name: tiltingheads-catalogue
+    restart: unless-stopped
+    ports:
+      - "${PORT:-5050}:5050"
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      PORT: 5050
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:5050/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  # One-shot: docker compose --profile tools run --rm migrate
+  migrate:
+    profiles: ["tools"]
+    image: tiltingheads-catalogue:latest
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+    command: ["node", "scripts/migrate.js"]
+    restart: "no"
+
+  # One-shot: docker compose --profile tools run --rm backfill
+  # Override brand: docker compose --profile tools run --rm backfill node scripts/backfill.js --brand=billicompany
+  backfill:
+    profiles: ["tools"]
+    image: tiltingheads-catalogue:latest
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+    command: ["node", "scripts/backfill.js", "--brand=tiltingheads"]
+    restart: "no"

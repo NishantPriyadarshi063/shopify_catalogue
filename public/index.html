@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Tilting Heads — Product Catalogue</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Karla:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div id="view-catalogue">
+    <div class="cover">
+      <div class="wrap">
+        <div class="eyebrow">Tervigon Collective · Live Catalogue</div>
+        <h1>Tilting<br>Heads<em>Product Catalogue</em></h1>
+        <p class="lede">Everything we make for the daily life of a pet — synced from Shopify into our catalogue.</p>
+        <div class="cover-stats">
+          <div><span class="stat-n" id="stat-products">—</span><span class="stat-l">Products</span></div>
+          <div><span class="stat-n" id="stat-categories">—</span><span class="stat-l">Categories</span></div>
+          <div><span class="stat-n" id="stat-stock">—</span><span class="stat-l">In Stock</span></div>
+        </div>
+        <div class="live-pill"><i></i><span id="live-status">Connecting…</span></div>
+      </div>
+    </div>
+
+    <div class="wrap">
+      <section class="contents">
+        <div class="sec-label">Contents</div>
+        <h2>What's inside</h2>
+        <div class="toolbar">
+          <input id="search" type="search" placeholder="Search title, SKU, tag…">
+          <select id="stock-filter">
+            <option value="">All stock</option>
+            <option value="in">In stock only</option>
+            <option value="out">Out of stock</option>
+          </select>
+        </div>
+        <div id="toc"></div>
+      </section>
+
+      <div id="catalogue-root">
+        <div class="loading">Loading catalogue…</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="view-product" class="hidden"></div>
+
+  <footer>
+    <div class="wrap">
+      <strong>Tilting Heads</strong>
+      <p>A Tervigon Collective brand · tiltingheads.com</p>
+      <p id="footer-meta">Live catalogue · Prices in INR</p>
+      <p>Prices, stock and specifications subject to change.</p>
+    </div>
+  </footer>
+
+  <script src="/app.js"></script>
+</body>
+</html>
