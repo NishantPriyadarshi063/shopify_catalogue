@@ -4,6 +4,7 @@ const express = require('express');
 const { CATEGORIES, CATEGORY_BLURBS } = require('../modules/catalogue/catalogueCategories');
 const { getBrandByBrandId, getAllConfiguredBrands } = require('../config/brands');
 const repository = require('../modules/catalogue/repository');
+const { streamCataloguePdf } = require('../modules/catalogue/cataloguePdf');
 
 function createCatalogueRoutes() {
   const router = express.Router();
@@ -20,6 +21,39 @@ function createCatalogueRoutes() {
   function setCacheHeaders(res) {
     res.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
   }
+
+  function slugify(name) {
+    return String(name || 'catalogue')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '')
+      .slice(0, 60) || 'catalogue';
+  }
+
+  // Server-side PDF — reliable (no blank html2canvas PDFs)
+  router.get('/:brandId/pdf', async (req, res) => {
+    const brandId = resolveBrandId(req, res);
+    if (brandId == null) return;
+
+    try {
+      const products = await repository.listProducts(brandId, {
+        status: 'ACTIVE',
+        includeVariants: true,
+      });
+
+      const category = req.query.category ? String(req.query.category) : null;
+      const filename = category
+        ? `tilting-heads-${slugify(category)}.pdf`
+        : 'tilting-heads-full-catalogue.pdf';
+
+      await streamCataloguePdf(res, { products, category, filename });
+    } catch (err) {
+      console.error('[pdf]', err);
+      if (!res.headersSent) {
+        res.status(500).json({ error: err.message || 'PDF generation failed' });
+      }
+    }
+  });
 
   router.get('/:brandId/meta', async (req, res) => {
     const brandId = resolveBrandId(req, res);

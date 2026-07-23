@@ -30,7 +30,12 @@
     <div class="wrap">
       <section class="contents">
         <div class="sec-label">Contents</div>
-        <h2>What's inside</h2>
+        <div class="contents-head">
+          <h2>What's inside</h2>
+          <button type="button" id="download-full-pdf" class="btn-download">
+            Download full PDF
+          </button>
+        </div>
         <div class="toolbar">
           <input id="search" type="search" placeholder="Search title, SKU, tag…">
           <select id="stock-filter">
@@ -49,6 +54,13 @@
   </div>
 
   <div id="view-product" class="hidden"></div>
+
+  <div id="pdf-overlay" class="pdf-overlay hidden" aria-live="polite">
+    <div class="pdf-overlay-card">
+      <div class="pdf-spinner"></div>
+      <p id="pdf-overlay-text">Preparing PDF…</p>
+    </div>
+  </div>
 
   <footer>
     <div class="wrap">

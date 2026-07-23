@@ -168,28 +168,100 @@ body::before {
   margin-bottom: 14px;
 }
 
+.contents-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+  margin-bottom: 40px;
+}
+
 .contents h2 {
   font-family: Fraunces, serif;
   font-size: 40px;
   font-weight: 600;
-  margin: 0 0 40px;
+  margin: 0;
   letter-spacing: -.02em;
+}
+
+.btn-download {
+  appearance: none;
+  border: 1px solid var(--teal);
+  background: var(--teal);
+  color: var(--cream);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  padding: 10px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background .2s ease, color .2s ease;
+}
+
+.btn-download:hover {
+  background: var(--teal-dp);
+  border-color: var(--teal-dp);
+}
+
+.btn-download:disabled {
+  opacity: .55;
+  cursor: wait;
 }
 
 .toc-row {
   display: flex;
-  align-items: baseline;
-  gap: 16px;
+  align-items: center;
+  gap: 12px;
   padding: 14px 0;
   border-bottom: 1px solid var(--line);
-  text-decoration: none;
   color: var(--ink);
+}
+
+.toc-link {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  flex: 1;
+  min-width: 0;
+  text-decoration: none;
+  color: inherit;
   transition: padding-left .22s ease, color .22s ease;
 }
 
-.toc-row:hover {
+.toc-link:hover {
   padding-left: 12px;
   color: var(--teal);
+}
+
+.toc-dl {
+  appearance: none;
+  flex-shrink: 0;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--teal);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  padding: 7px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: border-color .2s ease, background .2s ease;
+}
+
+.toc-dl:hover {
+  border-color: var(--teal);
+  background: #E4F2EC;
+}
+
+.toc-dl:disabled {
+  opacity: .55;
+  cursor: wait;
 }
 
 .toc-num {
@@ -665,4 +737,242 @@ footer strong {
   .cat-head { flex-wrap: wrap; }
   .cat-count { margin-left: 0; }
   .cover-stats { gap: 32px; }
+  .contents-head { align-items: flex-start; }
+}
+
+/* —— PDF download overlay + render surface —— */
+.pdf-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(35, 31, 26, .45);
+  display: grid;
+  place-items: center;
+}
+
+.pdf-overlay-card {
+  background: var(--cream);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 28px 36px;
+  text-align: center;
+  min-width: 240px;
+  box-shadow: 0 24px 48px -24px rgba(35, 31, 26, .4);
+}
+
+.pdf-overlay-card p {
+  margin: 14px 0 0;
+  font-family: Fraunces, serif;
+  font-size: 18px;
+  color: var(--ink);
+}
+
+.pdf-spinner {
+  width: 28px;
+  height: 28px;
+  margin: 0 auto;
+  border: 3px solid var(--line);
+  border-top-color: var(--teal);
+  border-radius: 50%;
+  animation: pdf-spin .8s linear infinite;
+}
+
+@keyframes pdf-spin {
+  to { transform: rotate(360deg); }
+}
+
+.pdf-render-root {
+  position: fixed;
+  left: -10000px;
+  top: 0;
+  width: 920px;
+  background: #FBF6EC;
+  color: #231F1A;
+  pointer-events: none;
+}
+
+.pdf-doc {
+  padding: 28px 32px 40px;
+  font-family: Karla, Georgia, serif;
+}
+
+.pdf-cover {
+  background: linear-gradient(160deg, #0A4B3B 0%, #0F6E56 58%, #14856a 100%);
+  color: #FBF6EC;
+  padding: 36px 32px;
+  margin: -28px -32px 32px;
+  border-radius: 0;
+}
+
+.pdf-cover .eyebrow {
+  font-size: 10px;
+  letter-spacing: .28em;
+  text-transform: uppercase;
+  opacity: .85;
+  margin-bottom: 14px;
+}
+
+.pdf-cover h1 {
+  font-family: Fraunces, Georgia, serif;
+  font-size: 42px;
+  font-weight: 600;
+  line-height: 1.05;
+  margin: 0 0 10px;
+}
+
+.pdf-cover p {
+  margin: 0;
+  opacity: .88;
+  font-size: 14px;
+}
+
+.pdf-section {
+  page-break-before: always;
+  padding-top: 8px;
+  margin-bottom: 28px;
+}
+
+.pdf-section:first-of-type {
+  page-break-before: auto;
+}
+
+.pdf-section-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 22px;
+  border-bottom: 1px solid #E0D3BC;
+  padding-bottom: 14px;
+}
+
+.pdf-section-head .num {
+  font-family: Fraunces, serif;
+  font-size: 36px;
+  font-weight: 600;
+  color: #F2E7D5;
+  line-height: .85;
+}
+
+.pdf-section-head h2 {
+  font-family: Fraunces, serif;
+  font-size: 24px;
+  font-weight: 600;
+  margin: 0 0 4px;
+}
+
+.pdf-section-head p {
+  margin: 0;
+  color: #6E6459;
+  font-size: 13px;
+}
+
+.pdf-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 18px;
+}
+
+.pdf-card {
+  background: #fff;
+  border: 1px solid #E0D3BC;
+  border-radius: 4px;
+  overflow: hidden;
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+
+.pdf-card-shot {
+  aspect-ratio: 1 / 1;
+  background: #F2E7D5;
+  overflow: hidden;
+}
+
+.pdf-card-shot img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.pdf-thumbs {
+  display: flex;
+  gap: 4px;
+  padding: 6px 8px 0;
+  overflow: hidden;
+}
+
+.pdf-thumbs img {
+  width: 36px;
+  height: 36px;
+  object-fit: cover;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.pdf-card-body {
+  padding: 12px 14px 14px;
+}
+
+.pdf-card-body h3 {
+  font-family: Fraunces, serif;
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0 0 6px;
+  line-height: 1.3;
+}
+
+.pdf-card-body .desc {
+  margin: 0 0 10px;
+  font-size: 11.5px;
+  color: #6E6459;
+  line-height: 1.5;
+}
+
+.pdf-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.pdf-card-meta .price {
+  font-family: Fraunces, serif;
+  font-size: 15px;
+  font-weight: 600;
+  color: #0F6E56;
+}
+
+.pdf-card-meta .chip {
+  font-size: 9px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  background: #F2E7D5;
+  color: #6E6459;
+  padding: 3px 7px;
+  border-radius: 100px;
+  font-weight: 600;
+}
+
+.pdf-card-meta .chip.oos {
+  background: #F6E2DA;
+  color: #C4643C;
+}
+
+.pdf-card-body .sku {
+  display: block;
+  margin-top: 8px;
+  font-size: 10px;
+  letter-spacing: .08em;
+  color: #A69B8C;
+}
+
+.pdf-options {
+  margin-top: 8px;
+  font-size: 10.5px;
+  color: #6E6459;
+  line-height: 1.45;
+}
+
+.pdf-options strong {
+  color: #231F1A;
 }

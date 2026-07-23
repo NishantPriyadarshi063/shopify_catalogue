@@ -224,12 +224,20 @@ function renderCatalogue() {
     .filter((section) => section.products.length > 0);
 
   toc.innerHTML = visibleSections.map((section) => `
-    <a class="toc-row" href="#cat-${section.id}">
-      <span class="toc-num">${padNum(section.id)}</span>
-      <span class="toc-name">${escapeHtml(section.name)}</span>
-      <span class="toc-dots"></span>
-      <span class="toc-count">${section.products.length}</span>
-    </a>
+    <div class="toc-row">
+      <a class="toc-link" href="#cat-${section.id}">
+        <span class="toc-num">${padNum(section.id)}</span>
+        <span class="toc-name">${escapeHtml(section.name)}</span>
+        <span class="toc-dots"></span>
+        <span class="toc-count">${section.products.length}</span>
+      </a>
+      <button
+        type="button"
+        class="toc-dl"
+        data-download-category="${section.id}"
+        title="Download ${escapeHtml(section.name)} as PDF"
+      >PDF</button>
+    </div>
   `).join('');
 
   if (!visibleSections.length) {
@@ -353,9 +361,111 @@ function wireProductGallery() {
   });
 }
 
+function getVisibleSections() {
+  return state.sections
+    .map((section) => ({
+      ...section,
+      products: section.products.filter(filterProduct),
+    }))
+    .filter((section) => section.products.length > 0);
+}
+
+function slugifyFilename(name) {
+  return String(name || 'catalogue')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 60) || 'catalogue';
+}
+
+function setPdfBusy(busy, message) {
+  const overlay = document.getElementById('pdf-overlay');
+  const text = document.getElementById('pdf-overlay-text');
+  const fullBtn = document.getElementById('download-full-pdf');
+  if (text && message) text.textContent = message;
+  if (overlay) overlay.classList.toggle('hidden', !busy);
+  if (fullBtn) fullBtn.disabled = busy;
+  document.querySelectorAll('.toc-dl').forEach((btn) => {
+    btn.disabled = busy;
+  });
+}
+
+async function downloadPdfFromApi({ category = null, filenameHint = 'catalogue' } = {}) {
+  setPdfBusy(true, category ? `Building “${category}” PDF…` : 'Building full catalogue PDF…');
+
+  try {
+    const qs = category ? `?category=${encodeURIComponent(category)}` : '';
+    const res = await fetch(`/api/v1/catalogue/${BRAND_ID}/pdf${qs}`);
+    if (!res.ok) {
+      let msg = `PDF failed (${res.status})`;
+      try {
+        const data = await res.json();
+        if (data?.error) msg = data.error;
+      } catch { /* ignore */ }
+      throw new Error(msg);
+    }
+
+    const blob = await res.blob();
+    if (!blob.size) throw new Error('PDF was empty — try again');
+
+    const disposition = res.headers.get('Content-Disposition') || '';
+    const match = disposition.match(/filename="([^"]+)"/i);
+    const filename = match?.[1] || `${slugifyFilename(filenameHint)}.pdf`;
+
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  } finally {
+    setPdfBusy(false);
+  }
+}
+
+async function downloadCategoryPdf(categoryId) {
+  const section = getVisibleSections().find((s) => String(s.id) === String(categoryId));
+  if (!section) {
+    alert('Category not found.');
+    return;
+  }
+  await downloadPdfFromApi({
+    category: section.name,
+    filenameHint: `tilting-heads-${section.name}`,
+  });
+}
+
+async function downloadFullCataloguePdf() {
+  await downloadPdfFromApi({ filenameHint: 'tilting-heads-full-catalogue' });
+}
+
+function wirePdfDownloads() {
+  document.getElementById('download-full-pdf').addEventListener('click', () => {
+    downloadFullCataloguePdf().catch((err) => {
+      console.error(err);
+      alert(err.message || 'PDF download failed');
+    });
+  });
+
+  document.getElementById('toc').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-download-category]');
+    if (!btn) return;
+    e.preventDefault();
+    e.stopPropagation();
+    downloadCategoryPdf(btn.getAttribute('data-download-category'))
+      .catch((err) => {
+        console.error(err);
+        alert(err.message || 'PDF download failed');
+      });
+  });
+}
+
 async function boot() {
   wireFilters();
   wireProductGallery();
+  wirePdfDownloads();
   window.addEventListener('hashchange', () => {
     route().catch((err) => console.error(err));
   });
