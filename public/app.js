@@ -13,6 +13,10 @@ const state = {
   activeImage: 0,
   imageFormat: 'jpeg',
   imageDownloadBusy: false,
+  selectedHandles: new Set(),
+  bulkFormat: 'jpeg',
+  bulkBusy: false,
+  bulkProgress: '',
 };
 
 const IMAGE_FORMATS = {
@@ -20,6 +24,9 @@ const IMAGE_FORMATS = {
   png: { mime: 'image/png', ext: 'png', quality: undefined, label: 'PNG' },
   webp: { mime: 'image/webp', ext: 'webp', quality: 0.92, label: 'WEBP' },
 };
+
+const BULK_CONCURRENCY = 5;
+const BULK_WARN_PRODUCTS = 50;
 
 function formatInr(n) {
   return `₹${Math.round(n).toLocaleString('en-IN')}`;
@@ -238,7 +245,7 @@ function filterProduct(product) {
   );
 }
 
-/** Catalogue grid card — click opens shared product detail page */
+/** Catalogue grid card — checkbox selects; body opens product detail */
 function renderCard(product) {
   const chips = [];
   const images = productImages(product);
@@ -255,20 +262,33 @@ function renderCard(product) {
   const cover = images[0]
     ? `<img loading="lazy" src="${escapeHtml(images[0].url)}" alt="${escapeHtml(product.title)}">`
     : '';
+  const selected = state.selectedHandles.has(product.handle);
+  const hasImages = images.length > 0;
 
   return `
-    <a class="card" href="${productHref(product.handle)}">
-      <div class="shot">${cover}</div>
-      <div class="body">
-        <h3>${escapeHtml(product.title)}</h3>
-        <p>${escapeHtml(product.description)}</p>
-        <div class="meta">
-          <span class="price">${formatPrice(product)}</span>
-          ${chips.join('')}
+    <article class="card${selected ? ' is-selected' : ''}${!hasImages ? ' no-images' : ''}" data-handle="${escapeHtml(product.handle)}">
+      <label class="card-check" title="${hasImages ? 'Select for image download' : 'No images to download'}">
+        <input
+          type="checkbox"
+          data-select-product="${escapeHtml(product.handle)}"
+          ${selected ? 'checked' : ''}
+          ${!hasImages || state.bulkBusy ? 'disabled' : ''}
+          aria-label="Select ${escapeHtml(product.title)}"
+        >
+      </label>
+      <a class="card-link" href="${productHref(product.handle)}">
+        <div class="shot">${cover}</div>
+        <div class="body">
+          <h3>${escapeHtml(product.title)}</h3>
+          <p>${escapeHtml(product.description)}</p>
+          <div class="meta">
+            <span class="price">${formatPrice(product)}</span>
+            ${chips.join('')}
+          </div>
+          ${product.sku ? `<span class="sku">${escapeHtml(product.sku)}</span>` : ''}
         </div>
-        ${product.sku ? `<span class="sku">${escapeHtml(product.sku)}</span>` : ''}
-      </div>
-    </a>
+      </a>
+    </article>
   `;
 }
 
@@ -448,13 +468,23 @@ function renderCatalogue() {
           <h2>${escapeHtml(section.name)}</h2>
           <p>${escapeHtml(section.blurb)}</p>
         </div>
-        <span class="cat-count">${section.products.length} products</span>
+        <div class="cat-head-actions">
+          <button
+            type="button"
+            class="cat-select"
+            data-select-category="${section.id}"
+            ${state.bulkBusy ? 'disabled' : ''}
+          >Select all</button>
+          <span class="cat-count">${section.products.length} products</span>
+        </div>
       </header>
       <div class="grid">
         ${section.products.map(renderCard).join('')}
       </div>
     </section>
   `).join('');
+
+  updateSelectionBar();
 }
 
 function updateStats(meta, sections) {
@@ -521,6 +551,7 @@ function showViews(routeName) {
     cat.classList.remove('hidden');
     document.title = 'Tilting Heads — Product Catalogue';
   }
+  updateSelectionBar();
 }
 
 async function route() {
@@ -709,10 +740,266 @@ function wirePdfDownloads() {
   });
 }
 
+function getProductByHandle(handle) {
+  for (const section of state.sections) {
+    const found = section.products.find((p) => p.handle === handle);
+    if (found) return found;
+  }
+  return null;
+}
+
+function getAllVisibleProducts() {
+  return getVisibleSections().flatMap((s) => s.products);
+}
+
+function countSelectedImages(products) {
+  return products.reduce((n, p) => n + productImages(p).length, 0);
+}
+
+function sanitizePathPart(value) {
+  return String(value || '')
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[<>:"/\\|?*\x00-\x1f]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/[^a-zA-Z0-9._-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 80) || 'item';
+}
+
+function productZipFolderName(product) {
+  const sku = sanitizePathPart(product.sku || 'NO-SKU');
+  const title = sanitizePathPart(product.title || product.handle || 'product');
+  return `${sku}_${title}`;
+}
+
+function toggleProductSelection(handle, checked) {
+  const product = getProductByHandle(handle);
+  if (!product || !productImages(product).length) return;
+  if (checked) state.selectedHandles.add(handle);
+  else state.selectedHandles.delete(handle);
+
+  const card = [...document.querySelectorAll('.card')]
+    .find((el) => el.getAttribute('data-handle') === handle);
+  if (card) {
+    card.classList.toggle('is-selected', checked);
+    const input = card.querySelector('[data-select-product]');
+    if (input) input.checked = checked;
+  }
+  updateSelectionBar();
+}
+
+function selectProducts(products) {
+  for (const p of products) {
+    if (productImages(p).length) state.selectedHandles.add(p.handle);
+  }
+  if (parseRoute().name === 'catalogue') renderCatalogue();
+  else updateSelectionBar();
+}
+
+function clearSelection() {
+  state.selectedHandles.clear();
+  if (parseRoute().name === 'catalogue') renderCatalogue();
+  else updateSelectionBar();
+}
+
+function updateSelectionBar() {
+  const bar = document.getElementById('selection-bar');
+  if (!bar) return;
+
+  const onCatalogue = parseRoute().name === 'catalogue';
+  const selected = [...state.selectedHandles]
+    .map(getProductByHandle)
+    .filter(Boolean);
+  const count = selected.length;
+  const imageCount = countSelectedImages(selected);
+
+  bar.classList.toggle('hidden', !onCatalogue || count === 0);
+
+  const countEl = document.getElementById('selection-count');
+  const hintEl = document.getElementById('selection-hint');
+  const progressEl = document.getElementById('selection-progress');
+  if (countEl) {
+    countEl.textContent = `${count} product${count === 1 ? '' : 's'} selected`;
+  }
+  if (hintEl) {
+    hintEl.textContent = imageCount
+      ? `· ${imageCount} image${imageCount === 1 ? '' : 's'}`
+      : '';
+    if (count > BULK_WARN_PRODUCTS) {
+      hintEl.textContent += ` · large download may take a few minutes`;
+    }
+  }
+  if (progressEl) progressEl.textContent = state.bulkProgress || '';
+
+  document.querySelectorAll('[data-bulk-format]').forEach((btn) => {
+    const key = btn.getAttribute('data-bulk-format');
+    btn.classList.toggle('is-active', key === state.bulkFormat);
+    btn.disabled = state.bulkBusy;
+  });
+
+  const downloadBtn = document.getElementById('download-selected-images');
+  const clearBtn = document.getElementById('clear-selection');
+  const selectAllBtn = document.getElementById('select-all-visible');
+  if (downloadBtn) {
+    downloadBtn.disabled = state.bulkBusy || count === 0;
+    downloadBtn.textContent = state.bulkBusy
+      ? 'Preparing zip…'
+      : `Download images (${IMAGE_FORMATS[state.bulkFormat].label})`;
+  }
+  if (clearBtn) clearBtn.disabled = state.bulkBusy;
+  if (selectAllBtn) selectAllBtn.disabled = state.bulkBusy;
+
+  document.body.classList.toggle('has-selection-bar', onCatalogue && count > 0);
+}
+
+async function mapPool(items, concurrency, worker) {
+  const results = new Array(items.length);
+  let next = 0;
+
+  async function run() {
+    while (next < items.length) {
+      const index = next;
+      next += 1;
+      results[index] = await worker(items[index], index);
+    }
+  }
+
+  const runners = Array.from({ length: Math.min(concurrency, items.length) }, () => run());
+  await Promise.all(runners);
+  return results;
+}
+
+async function downloadSelectedImagesZip() {
+  if (typeof JSZip === 'undefined' || typeof saveAs === 'undefined') {
+    throw new Error('Zip libraries still loading — wait a second and try again');
+  }
+
+  const selected = [...state.selectedHandles]
+    .map(getProductByHandle)
+    .filter((p) => p && productImages(p).length);
+
+  if (!selected.length) {
+    throw new Error('No products with images selected');
+  }
+
+  const formatKey = IMAGE_FORMATS[state.bulkFormat] ? state.bulkFormat : 'jpeg';
+  const imageJobs = [];
+  for (const product of selected) {
+    const folder = productZipFolderName(product);
+    const images = productImages(product);
+    images.forEach((img, i) => {
+      imageJobs.push({
+        product,
+        folder,
+        url: img.url,
+        filename: `${folder}_${i + 1}.${IMAGE_FORMATS[formatKey].ext}`,
+      });
+    });
+  }
+
+  if (selected.length > BULK_WARN_PRODUCTS) {
+    const ok = window.confirm(
+      `Downloading ${selected.length} products (~${imageJobs.length} images) — this may take a few minutes. Continue?`,
+    );
+    if (!ok) return;
+  }
+
+  state.bulkBusy = true;
+  state.bulkProgress = `Downloading 0/${imageJobs.length} images…`;
+  updateSelectionBar();
+  if (parseRoute().name === 'catalogue') renderCatalogue();
+
+  try {
+    const zip = new JSZip();
+    const root = `TiltingHeads_Images_${new Date().toISOString().slice(0, 10)}`;
+    let done = 0;
+
+    await mapPool(imageJobs, BULK_CONCURRENCY, async (job) => {
+      const blob = await convertImageBlob(job.url, formatKey);
+      zip.file(`${root}/${job.folder}/${job.filename}`, blob);
+      done += 1;
+      state.bulkProgress = `Downloading ${done}/${imageJobs.length} images…`;
+      const progressEl = document.getElementById('selection-progress');
+      if (progressEl) progressEl.textContent = state.bulkProgress;
+    });
+
+    state.bulkProgress = 'Building zip file…';
+    updateSelectionBar();
+
+    const zipBlob = await zip.generateAsync({
+      type: 'blob',
+      compression: 'DEFLATE',
+      compressionOptions: { level: 6 },
+    });
+
+    saveAs(zipBlob, `${root}.zip`);
+    state.bulkProgress = `Done — ${imageJobs.length} images zipped`;
+  } finally {
+    state.bulkBusy = false;
+    updateSelectionBar();
+    if (parseRoute().name === 'catalogue') renderCatalogue();
+    setTimeout(() => {
+      state.bulkProgress = '';
+      updateSelectionBar();
+    }, 2500);
+  }
+}
+
+function wireBulkSelection() {
+  const root = document.getElementById('catalogue-root');
+  root.addEventListener('change', (e) => {
+    const input = e.target.closest('[data-select-product]');
+    if (!input) return;
+    toggleProductSelection(input.getAttribute('data-select-product'), input.checked);
+  });
+
+  root.addEventListener('click', (e) => {
+    const selectCat = e.target.closest('[data-select-category]');
+    if (!selectCat) return;
+    e.preventDefault();
+    const section = getVisibleSections().find(
+      (s) => String(s.id) === String(selectCat.getAttribute('data-select-category')),
+    );
+    if (!section) return;
+    selectProducts(section.products);
+  });
+
+  document.getElementById('select-all-visible').addEventListener('click', () => {
+    selectProducts(getAllVisibleProducts());
+  });
+
+  document.getElementById('clear-selection').addEventListener('click', () => {
+    clearSelection();
+  });
+
+  document.getElementById('download-selected-images').addEventListener('click', () => {
+    downloadSelectedImagesZip().catch((err) => {
+      console.error(err);
+      alert(err.message || 'Bulk image download failed');
+      state.bulkBusy = false;
+      state.bulkProgress = '';
+      updateSelectionBar();
+      if (parseRoute().name === 'catalogue') renderCatalogue();
+    });
+  });
+
+  document.querySelector('.selection-format')?.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-bulk-format]');
+    if (!btn || state.bulkBusy) return;
+    const next = btn.getAttribute('data-bulk-format');
+    if (!IMAGE_FORMATS[next]) return;
+    state.bulkFormat = next;
+    updateSelectionBar();
+  });
+}
+
 async function boot() {
   wireFilters();
   wireProductGallery();
   wirePdfDownloads();
+  wireBulkSelection();
   window.addEventListener('hashchange', () => {
     route().catch((err) => console.error(err));
   });

@@ -10,6 +10,8 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Karla:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/styles.css">
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
 </head>
 <body>
   <div id="view-catalogue">
@@ -55,6 +57,26 @@
 
   <div id="view-product" class="hidden"></div>
 
+  <div id="selection-bar" class="selection-bar hidden" aria-live="polite">
+    <div class="selection-bar-inner">
+      <div class="selection-bar-copy">
+        <strong id="selection-count">0 products selected</strong>
+        <span id="selection-hint" class="selection-hint"></span>
+        <span id="selection-progress" class="selection-progress"></span>
+      </div>
+      <div class="selection-bar-actions">
+        <div class="pdp-format selection-format" role="group" aria-label="Zip image format">
+          <button type="button" class="pdp-format-btn is-active" data-bulk-format="jpeg">JPEG</button>
+          <button type="button" class="pdp-format-btn" data-bulk-format="png">PNG</button>
+          <button type="button" class="pdp-format-btn" data-bulk-format="webp">WEBP</button>
+        </div>
+        <button type="button" class="btn-download-ghost" id="select-all-visible">Select all visible</button>
+        <button type="button" class="btn-download-ghost" id="clear-selection">Clear</button>
+        <button type="button" class="btn-download" id="download-selected-images">Download images</button>
+      </div>
+    </div>
+  </div>
+
   <div id="pdf-overlay" class="pdf-overlay hidden" aria-live="polite">
     <div class="pdf-overlay-card">
       <div class="pdf-spinner"></div>
@@ -70,6 +92,6 @@
     </div>
   </footer>
 
-  <script src="/app.js"></script>
+  <script defer src="/app.js"></script>
 </body>
 </html>
