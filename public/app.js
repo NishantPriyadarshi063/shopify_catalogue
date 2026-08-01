@@ -11,6 +11,14 @@ const state = {
   stock: '',
   product: null,
   activeImage: 0,
+  imageFormat: 'jpeg',
+  imageDownloadBusy: false,
+};
+
+const IMAGE_FORMATS = {
+  jpeg: { mime: 'image/jpeg', ext: 'jpg', quality: 0.95, label: 'JPEG' },
+  png: { mime: 'image/png', ext: 'png', quality: undefined, label: 'PNG' },
+  webp: { mime: 'image/webp', ext: 'webp', quality: 0.92, label: 'WEBP' },
 };
 
 function formatInr(n) {
@@ -51,6 +59,157 @@ function productImages(product) {
   if (product.images && product.images.length) return product.images;
   if (product.image) return [{ url: product.image, altText: product.title }];
   return [];
+}
+
+/** Strip Shopify CDN resize params / size suffixes so we fetch the original file. */
+function shopifyOriginalUrl(url) {
+  if (!url) return '';
+  try {
+    const u = new URL(url);
+    ['width', 'height', 'crop', 'pad_color'].forEach((k) => u.searchParams.delete(k));
+    u.pathname = u.pathname.replace(
+      /_(?:pico|icon|thumb|small|compact|medium|large|grande|original|master|\d+x\d*(?:@[23]x)?)(?=\.[a-z0-9]+$)/i,
+      '',
+    );
+    return u.toString();
+  } catch {
+    return url;
+  }
+}
+
+function mimeToFormat(mime) {
+  const m = String(mime || '').toLowerCase();
+  if (m.includes('png')) return 'png';
+  if (m.includes('webp')) return 'webp';
+  if (m.includes('jpeg') || m.includes('jpg')) return 'jpeg';
+  return null;
+}
+
+function urlToFormat(url) {
+  const match = String(url || '').match(/\.(jpe?g|png|webp|gif)(?:\?|$)/i);
+  if (!match) return null;
+  const ext = match[1].toLowerCase();
+  if (ext === 'jpg' || ext === 'jpeg') return 'jpeg';
+  if (ext === 'png') return 'png';
+  if (ext === 'webp') return 'webp';
+  return null;
+}
+
+function triggerBlobDownload(blob, filename) {
+  const href = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = href;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(href);
+}
+
+function loadImageElement(url) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error('Could not load image for conversion'));
+    img.src = url;
+  });
+}
+
+async function canvasEncode(img, formatKey) {
+  const cfg = IMAGE_FORMATS[formatKey];
+  const canvas = document.createElement('canvas');
+  canvas.width = img.naturalWidth || img.width;
+  canvas.height = img.naturalHeight || img.height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Canvas unavailable');
+  if (formatKey === 'jpeg') {
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
+  ctx.drawImage(img, 0, 0);
+  const blob = await new Promise((resolve) => {
+    canvas.toBlob(resolve, cfg.mime, cfg.quality);
+  });
+  if (!blob) throw new Error(`Browser could not encode ${cfg.label}`);
+  return blob;
+}
+
+async function fetchOriginalBlob(url) {
+  const original = shopifyOriginalUrl(url);
+  const proxy = `/api/v1/catalogue/${BRAND_ID}/image?url=${encodeURIComponent(original)}`;
+  const res = await fetch(proxy);
+  if (!res.ok) throw new Error(`Image fetch failed (${res.status})`);
+  const blob = await res.blob();
+  return { blob, url: original, contentType: blob.type || res.headers.get('content-type') || '' };
+}
+
+function supportsWebpEncode() {
+  try {
+    const c = document.createElement('canvas');
+    c.width = 1;
+    c.height = 1;
+    return c.toDataURL('image/webp').startsWith('data:image/webp');
+  } catch {
+    return false;
+  }
+}
+
+async function convertImageBlob(sourceUrl, formatKey) {
+  if (formatKey === 'webp' && !supportsWebpEncode()) {
+    throw new Error('This browser cannot export WEBP — try JPEG or PNG');
+  }
+
+  const { blob, url, contentType } = await fetchOriginalBlob(sourceUrl);
+  const sourceFormat = mimeToFormat(contentType) || urlToFormat(url);
+  if (sourceFormat === formatKey) {
+    return blob;
+  }
+
+  const objectUrl = URL.createObjectURL(blob);
+  try {
+    const img = await loadImageElement(objectUrl);
+    return await canvasEncode(img, formatKey);
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
+function imageDownloadFilename(product, index, formatKey, total) {
+  const base = slugifyFilename(product.handle || product.sku || product.title || 'product');
+  const ext = IMAGE_FORMATS[formatKey].ext;
+  if (total > 1) return `${base}-${String(index + 1).padStart(2, '0')}.${ext}`;
+  return `${base}.${ext}`;
+}
+
+async function downloadProductImage(product, index, formatKey) {
+  const images = productImages(product);
+  const image = images[index];
+  if (!image?.url) throw new Error('No image to download');
+  const blob = await convertImageBlob(image.url, formatKey);
+  triggerBlobDownload(blob, imageDownloadFilename(product, index, formatKey, images.length));
+}
+
+async function downloadAllProductImages(product, formatKey) {
+  const images = productImages(product);
+  if (!images.length) throw new Error('No images to download');
+  for (let i = 0; i < images.length; i += 1) {
+    const blob = await convertImageBlob(images[i].url, formatKey);
+    triggerBlobDownload(blob, imageDownloadFilename(product, i, formatKey, images.length));
+    if (i < images.length - 1) {
+      await new Promise((r) => setTimeout(r, 350));
+    }
+  }
+}
+
+function setImageDownloadBusy(busy) {
+  state.imageDownloadBusy = busy;
+  document.querySelectorAll('[data-download-image], [data-download-all-images]').forEach((el) => {
+    el.disabled = busy;
+  });
+  document.querySelectorAll('[data-image-format]').forEach((el) => {
+    el.disabled = busy;
+  });
 }
 
 function productHref(handle) {
@@ -144,6 +303,41 @@ function renderProductDetail(product, activeIndex = 0) {
       </div>`
     : `<div class="pdp-main pdp-main-empty">No image</div>`;
 
+  const format = IMAGE_FORMATS[state.imageFormat] ? state.imageFormat : 'jpeg';
+  const busy = state.imageDownloadBusy;
+  const downloadBar = images.length
+    ? `<div class="pdp-download">
+        <div class="pdp-download-label">Download image</div>
+        <div class="pdp-format" role="group" aria-label="Image format">
+          ${Object.entries(IMAGE_FORMATS).map(([key, cfg]) => `
+            <button
+              type="button"
+              class="pdp-format-btn${format === key ? ' is-active' : ''}"
+              data-image-format="${key}"
+              ${busy ? 'disabled' : ''}
+            >${cfg.label}</button>
+          `).join('')}
+        </div>
+        <div class="pdp-download-actions">
+          <button
+            type="button"
+            class="btn-download pdp-dl-btn"
+            data-download-image
+            ${busy ? 'disabled' : ''}
+          >${busy ? 'Downloading…' : 'Download this photo'}</button>
+          ${images.length > 1 ? `
+            <button
+              type="button"
+              class="btn-download-ghost pdp-dl-btn"
+              data-download-all-images
+              ${busy ? 'disabled' : ''}
+            >Download all ${images.length}</button>
+          ` : ''}
+        </div>
+        <p class="pdp-download-hint">Original resolution · ${IMAGE_FORMATS[format].label}</p>
+      </div>`
+    : '';
+
   const fullText = product.descriptionFull || product.description || '';
   const paragraphs = fullText
     .split(/\n+/)
@@ -188,6 +382,7 @@ function renderProductDetail(product, activeIndex = 0) {
     <article class="pdp wrap">
       <div class="pdp-media">
         ${main}
+        ${downloadBar}
         ${thumbs}
       </div>
       <div class="pdp-info">
@@ -351,6 +546,58 @@ function wireFilters() {
 
 function wireProductGallery() {
   document.getElementById('view-product').addEventListener('click', (e) => {
+    const formatBtn = e.target.closest('[data-image-format]');
+    if (formatBtn && state.product) {
+      const next = formatBtn.getAttribute('data-image-format');
+      if (!IMAGE_FORMATS[next] || next === state.imageFormat) return;
+      state.imageFormat = next;
+      document.getElementById('view-product').innerHTML =
+        renderProductDetail(state.product, state.activeImage);
+      return;
+    }
+
+    const downloadOne = e.target.closest('[data-download-image]');
+    if (downloadOne && state.product) {
+      e.preventDefault();
+      setImageDownloadBusy(true);
+      downloadProductImage(state.product, state.activeImage, state.imageFormat)
+        .catch((err) => {
+          console.error(err);
+          alert(err.message || 'Image download failed');
+        })
+        .finally(() => {
+          setImageDownloadBusy(false);
+          if (state.product) {
+            document.getElementById('view-product').innerHTML =
+              renderProductDetail(state.product, state.activeImage);
+          }
+        });
+      document.getElementById('view-product').innerHTML =
+        renderProductDetail(state.product, state.activeImage);
+      return;
+    }
+
+    const downloadAll = e.target.closest('[data-download-all-images]');
+    if (downloadAll && state.product) {
+      e.preventDefault();
+      setImageDownloadBusy(true);
+      downloadAllProductImages(state.product, state.imageFormat)
+        .catch((err) => {
+          console.error(err);
+          alert(err.message || 'Image download failed');
+        })
+        .finally(() => {
+          setImageDownloadBusy(false);
+          if (state.product) {
+            document.getElementById('view-product').innerHTML =
+              renderProductDetail(state.product, state.activeImage);
+          }
+        });
+      document.getElementById('view-product').innerHTML =
+        renderProductDetail(state.product, state.activeImage);
+      return;
+    }
+
     const btn = e.target.closest('[data-image-index]');
     if (!btn || !state.product) return;
     const index = Number(btn.getAttribute('data-image-index'));

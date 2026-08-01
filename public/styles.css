@@ -526,6 +526,107 @@ body::before {
   color: var(--muted);
 }
 
+.pdp-download {
+  margin-top: 16px;
+  padding: 14px 0 4px;
+  border-top: 1px solid var(--line);
+}
+
+.pdp-download-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+
+.pdp-format {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+
+.pdp-format-btn {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  padding: 8px 14px;
+  cursor: pointer;
+  border-right: 1px solid var(--line);
+}
+
+.pdp-format-btn:last-child {
+  border-right: 0;
+}
+
+.pdp-format-btn:hover:not(:disabled) {
+  color: var(--ink);
+  background: var(--sand);
+}
+
+.pdp-format-btn.is-active {
+  background: var(--teal);
+  color: var(--cream);
+}
+
+.pdp-format-btn:disabled {
+  opacity: .55;
+  cursor: wait;
+}
+
+.pdp-download-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.pdp-dl-btn {
+  font-size: 11px;
+  padding: 9px 14px;
+}
+
+.btn-download-ghost {
+  appearance: none;
+  border: 1px solid var(--teal);
+  background: transparent;
+  color: var(--teal);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  padding: 10px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background .2s ease, color .2s ease;
+}
+
+.btn-download-ghost:hover:not(:disabled) {
+  background: var(--teal);
+  color: var(--cream);
+}
+
+.btn-download-ghost:disabled {
+  opacity: .55;
+  cursor: wait;
+}
+
+.pdp-download-hint {
+  margin: 10px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
 .pdp-thumbs {
   display: flex;
   flex-wrap: wrap;

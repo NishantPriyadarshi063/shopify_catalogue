@@ -1,10 +1,30 @@
 'use strict';
 
 const express = require('express');
+const axios = require('axios');
 const { CATEGORIES, CATEGORY_BLURBS } = require('../modules/catalogue/catalogueCategories');
 const { getBrandByBrandId, getAllConfiguredBrands } = require('../config/brands');
 const repository = require('../modules/catalogue/repository');
 const { streamCataloguePdf } = require('../modules/catalogue/cataloguePdf');
+
+const SHOPIFY_CDN_HOSTS = new Set([
+  'cdn.shopify.com',
+  'cdn.shopifycdn.net',
+]);
+
+function isAllowedShopifyImageUrl(raw) {
+  try {
+    const u = new URL(String(raw || ''));
+    if (u.protocol !== 'https:') return false;
+    const host = u.hostname.toLowerCase();
+    if (SHOPIFY_CDN_HOSTS.has(host)) return true;
+    if (host.endsWith('.myshopify.com')) return true;
+    if (host.endsWith('.shopify.com')) return true;
+    return false;
+  } catch {
+    return false;
+  }
+}
 
 function createCatalogueRoutes() {
   const router = express.Router();
@@ -29,6 +49,44 @@ function createCatalogueRoutes() {
       .replace(/^-|-$/g, '')
       .slice(0, 60) || 'catalogue';
   }
+
+  // Proxy Shopify CDN images (same-origin → reliable original downloads)
+  router.get('/:brandId/image', async (req, res) => {
+    const brandId = resolveBrandId(req, res);
+    if (brandId == null) return;
+
+    const target = String(req.query.url || '');
+    if (!isAllowedShopifyImageUrl(target)) {
+      return res.status(400).json({ error: 'Invalid or disallowed image URL' });
+    }
+
+    try {
+      const upstream = await axios.get(target, {
+        responseType: 'stream',
+        timeout: 60000,
+        headers: { Accept: 'image/*,*/*' },
+        maxRedirects: 3,
+        validateStatus: (s) => s >= 200 && s < 400,
+      });
+
+      const contentType = upstream.headers['content-type'] || 'application/octet-stream';
+      if (!String(contentType).startsWith('image/')) {
+        return res.status(502).json({ error: 'Upstream did not return an image' });
+      }
+
+      res.set('Content-Type', contentType);
+      res.set('Cache-Control', 'public, max-age=86400, immutable');
+      if (upstream.headers['content-length']) {
+        res.set('Content-Length', upstream.headers['content-length']);
+      }
+      upstream.data.pipe(res);
+    } catch (err) {
+      console.error('[image-proxy]', err.message || err);
+      if (!res.headersSent) {
+        res.status(502).json({ error: 'Could not fetch image' });
+      }
+    }
+  });
 
   // Server-side PDF — reliable (no blank html2canvas PDFs)
   router.get('/:brandId/pdf', async (req, res) => {
